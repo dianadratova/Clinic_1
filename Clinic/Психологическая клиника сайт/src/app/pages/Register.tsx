@@ -1,83 +1,103 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { AsYouType } from 'libphonenumber-js';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useApp } from '../context/AppContext';
 import { toast } from 'sonner';
 
+// Схема валидации формы регистрации
+const registerSchema = z
+  .object({
+    lastName: z
+      .string()
+      .min(1, 'Фамилия обязательна')
+      .regex(/^[А-Яа-яЁёA-Za-z-]+$/, 'Фамилия не должна содержать цифр'),
+    firstName: z
+      .string()
+      .min(1, 'Имя обязательно')
+      .regex(/^[А-Яа-яЁёA-Za-z-]+$/, 'Имя не должно содержать цифр'),
+    middleName: z
+      .string()
+      .optional()
+      .or(z.literal(''))
+      .refine(
+        (value) => !value || /^[А-Яа-яЁёA-Za-z-]+$/.test(value),
+        'Отчество не должно содержать цифр'
+      ),
+    phone: z
+      .string()
+      .min(1, 'Номер телефона обязателен')
+      .refine(
+        (value) => {
+          const digits = value.replace(/\D/g, '');
+          return digits.length === 11 && digits.startsWith('7');
+        },
+        'Номер телефона должен содержать 11 цифр и начинаться с 7'
+      ),
+    email: z
+      .string()
+      .min(1, 'Email обязателен')
+      .email('Некорректный формат email'),
+    password: z
+      .string()
+      .min(8, 'Пароль должен содержать минимум 8 символов')
+      .regex(/[A-ZА-Я]/, 'Добавьте хотя бы одну заглавную букву')
+      .regex(/[a-zа-я]/, 'Добавьте хотя бы одну строчную букву')
+      .regex(/\d/, 'Добавьте хотя бы одну цифру')
+      .regex(/[^A-Za-zА-Яа-я0-9]/, 'Добавьте хотя бы один спецсимвол'),
+  });
+
+type RegisterFormData = z.infer<typeof registerSchema>;
+
 export function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  const { register, isLoading } = useApp();
+  const { register: registerUser, isLoading } = useApp();
 
-  const [lastName, setLastName] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [middleName, setMiddleName] = useState('');
-  const [registerPhone, setRegisterPhone] = useState('');
-  const [registerEmail, setRegisterEmail] = useState('');
-  const [registerPassword, setRegisterPassword] = useState('');
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<RegisterFormData>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      lastName: '',
+      firstName: '',
+      middleName: '',
+      phone: '+7',
+      email: '',
+      password: '',
+    },
+  });
 
-  const formatPhone = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    if (numbers.length <= 1) return '+7';
-    if (numbers.length <= 4) return `+7 (${numbers.slice(1)}`;
-    if (numbers.length <= 7) return `+7 (${numbers.slice(1, 4)}) ${numbers.slice(4)}`;
-    if (numbers.length <= 9) return `+7 (${numbers.slice(1, 4)}) ${numbers.slice(4, 7)}-${numbers.slice(7)}`;
-    return `+7 (${numbers.slice(1, 4)}) ${numbers.slice(4, 7)}-${numbers.slice(7, 9)}-${numbers.slice(9, 11)}`;
+  // Надёжное форматирование телефона через libphonenumber-js (AsYouType)
+  const handlePhoneChange = (value: string) => {
+    const formatter = new AsYouType('RU');
+    const formatted = formatter.input(value);
+    setValue('phone', formatted, { shouldValidate: true });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validation
-    if (!lastName.trim() || /\d/.test(lastName)) {
-      toast.error('Фамилия обязательна и не должна содержать цифр');
-      return;
-    }
-
-    if (!firstName.trim() || /\d/.test(firstName)) {
-      toast.error('Имя обязательно и не должно содержать цифр');
-      return;
-    }
-    if (middleName.trim() && /\d/.test(middleName)) {
-      toast.error('Отчество не должно содержать цифр');
-      return;
-    }
-
-    // if (!middleName.trim() || /\d/.test(middleName)) {
-    //   toast.error('Отчество обязательно и не должно содержать цифр');
-    //   return;
-    // }
-
-    const phoneNumbers = registerPhone.replace(/\D/g, '');
-    if (phoneNumbers.length !== 11) {
-      toast.error('Номер телефона должен содержать 11 цифр');
-      return;
-    }
-
-    if (!registerEmail.includes('@') || !registerEmail.includes('.')) {
-      toast.error('Некорректный формат email');
-      return;
-    }
-
-    if (registerPassword.length < 6) {
-      toast.error('Пароль должен содержать минимум 6 символов');
-      return;
-    }
-
+  const onSubmit = async (data: RegisterFormData) => {
     try {
-      const fullName = middleName.trim() 
-  ? `${lastName.trim()} ${firstName.trim()} ${middleName.trim()}`
-  : `${lastName.trim()} ${firstName.trim()}`;
-      // const fullName = `${lastName.trim()} ${firstName.trim()} ${middleName.trim()}`;
-      await register(fullName, registerPhone, registerEmail, registerPassword);
-      
+      const trimmedLast = data.lastName.trim();
+      const trimmedFirst = data.firstName.trim();
+      const trimmedMiddle = data.middleName?.trim() || '';
+
+      const fullName =
+        trimmedMiddle.length > 0
+          ? `${trimmedLast} ${trimmedFirst} ${trimmedMiddle}`
+          : `${trimmedLast} ${trimmedFirst}`;
+
+      await registerUser(fullName, data.phone, data.email, data.password);
+
       toast.success('Регистрация прошла успешно! Пожалуйста, войдите в систему.');
-      
-      // ИСПРАВЛЕНИЕ: Перенаправляем пользователя на страницу входа, а не в профиль
       navigate('/login');
-      
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Ошибка регистрации');
     }
@@ -88,71 +108,79 @@ export function Register() {
       <div className="max-w-[480px] w-full">
         <div className="bg-white rounded-lg p-12">
           <h2 className="mb-8">Регистрация</h2>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div>
               <Input
                 label="Фамилия"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
                 placeholder="Иванова"
-                required
+                {...register('lastName')}
               />
+              {errors.lastName && (
+                <p className="text-red-500 text-sm mt-1">{errors.lastName.message}</p>
+              )}
               <p className="text-muted-foreground mt-2">Без цифр</p>
             </div>
 
             <div>
               <Input
                 label="Имя"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
                 placeholder="Мария"
-                required
+                {...register('firstName')}
               />
+              {errors.firstName && (
+                <p className="text-red-500 text-sm mt-1">{errors.firstName.message}</p>
+              )}
               <p className="text-muted-foreground mt-2">Без цифр</p>
             </div>
 
             <div>
               <Input
                 label="Отчество"
-                value={middleName}
-                onChange={(e) => setMiddleName(e.target.value)}
                 placeholder="Петровна"
-                // required
+                {...register('middleName')}
               />
-              <p className="text-muted-foreground mt-2">Не обязательное поле ввода</p>
+              {errors.middleName && (
+                <p className="text-red-500 text-sm mt-1">{errors.middleName.message}</p>
+              )}
+              <p className="text-muted-foreground mt-2">Необязательное поле</p>
             </div>
 
             <div>
               <Input
                 label="Номер телефона"
-                value={registerPhone}
-                onChange={(e) => setRegisterPhone(formatPhone(e.target.value))}
                 placeholder="+7 (___) ___-__-__"
-                required
+                {...register('phone')}
+                onChange={(e) => handlePhoneChange(e.target.value)}
               />
-              <p className="text-muted-foreground mt-2">11 цифр с учетом кода страны</p>
+              {errors.phone && (
+                <p className="text-red-500 text-sm mt-1">{errors.phone.message}</p>
+              )}
+              <p className="text-muted-foreground mt-2">
+                11 цифр с учётом кода страны
+              </p>
             </div>
 
             <div>
               <Input
                 label="Электронная почта"
                 type="email"
-                value={registerEmail}
-                onChange={(e) => setRegisterEmail(e.target.value)}
                 placeholder="example@mail.com"
-                required
+                {...register('email')}
               />
-              <p className="text-muted-foreground mt-2">Обязательно наличие @ и домена</p>
+              {errors.email && (
+                <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+              )}
+              <p className="text-muted-foreground mt-2">
+                Проверяется формат email по стандарту
+              </p>
             </div>
 
             <div className="relative">
               <Input
                 label="Пароль"
                 type={showPassword ? 'text' : 'password'}
-                value={registerPassword}
-                onChange={(e) => setRegisterPassword(e.target.value)}
                 placeholder=""
-                required
+                {...register('password')}
               />
               <button
                 type="button"
@@ -161,11 +189,16 @@ export function Register() {
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
-              <p className="text-muted-foreground mt-2">Минимум 6 символов</p>
+              {errors.password && (
+                <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>
+              )}
+              <p className="text-muted-foreground mt-2">
+                Минимум 8 символов, буквы разного регистра, цифры и спецсимвол
+              </p>
             </div>
 
             <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-              {isLoading ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+              {isLoading && <Loader2 className="animate-spin mr-2" size={16} />}
               Зарегистрироваться
             </Button>
 

@@ -3,7 +3,7 @@
 bash
 # 1. Зайдите в папку с бэкэндом
 ```bash
-cd Clinic/backend-master
+cd Clinic_1/Clinic/backend-master/TRPO
 ```
 # 2. Создайте виртуальное окружение
 Для Linux/MACOS
@@ -23,16 +23,12 @@ source venv/bin/activate
 ```bash
 source venv/Scripts/activate
 ```
-# 4. Перейдем в другую папку
-```bash
-cd TRPO/
-```
-# 5. Установите зависимости
+# 4. Установите зависимости
 ```bash
 pip install -r requirements.txt
 ```
 
-# 6. Примените миграции базы данных
+# 5. Примените миграции базы данных
 ```bash
 python manage.py migrate
 ```
@@ -48,7 +44,13 @@ python manage.py runserver
 bash
 # 1. Зайдите в папку фронтенда
 ```bash
-cd Clinic/Психологическая клиника сайт
+cd Clinic_1/Психологическая клиника сайт
+```
+# 3. Установить вручную (если нет package.json)
+```bash
+npm install zod @hookform/resolvers libphonenumber-js
+npm install react-hook-form zod @hookform/resolvers libphonenumber-js
+npm install @hookform/resolvers
 ```
 # 2. Установите зависимости
 ```bash
