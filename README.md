@@ -44,11 +44,11 @@ python manage.py runserver
 bash
 # 1. Зайдите в папку фронтенда
 ```bash
-cd Clinic_1/Психологическая клиника сайт
+cd Clinic_1/Clinic/Психологическая клиника сайт
 ```
 # 3. Установить вручную (если нет package.json)
 ```bash
-npm install zod @hookform/resolvers libphonenumber-js
+npm install zod@3.22.4 @hookform/resolvers@3.3.2 libphonenumber-js
 npm install react-hook-form zod @hookform/resolvers libphonenumber-js
 npm install @hookform/resolvers
 ```
